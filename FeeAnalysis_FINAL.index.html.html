@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRF Implied Fee Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --krf-navy: #0f172a; --krf-blue: #1e3a8a; --krf-azure: #3b82f6; --krf-orange: #f97316; }
+        @media print { .no-print { display: none !important; } body { background: white !important; } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 10px; }
+        .stat-card { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); }
+        .benchmark-text { color: var(--krf-orange); }
+        th { cursor: pointer; transition: background 0.2s; }
+        th:hover { background-color: #e2e8f0 !important; }
+        th::after { content: ' ↕'; font-size: 0.8em; opacity: 0.3; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+    <div class="max-w-[1600px] mx-auto p-4 lg:p-8">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 bg-white p-6 rounded-2xl shadow-lg border-b-4 border-blue-700">
+            <div>
+                <h1 class="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">KRF <span class="text-blue-800">Implied Fee Tool</span></h1>
+                <p class="text-slate-500 text-sm font-medium italic">Institutional Portfolio Audit & Regime Analysis</p>
+            </div>
+            <button onclick="window.print()" class="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold no-print shadow-md hover:bg-slate-800 transition">Print Report</button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-3 space-y-6 no-print">
+                <section class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white border-t-4 border-blue-600">
+                    <h2 class="text-xs font-black text-blue-400 uppercase mb-6 tracking-widest text-center">Control Panel</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Principal Investment</label>
+                            <input type="number" id="principal" value="1000000" class="w-full bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Start</label>
+                                <select id="startYear" class="w-full bg-slate-800 border-none rounded-lg p-2 text-xs font-bold text-white h-10"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">End</label>
+                                <select id="endYear" class="w-full bg-slate-800 border-none rounded-lg p-2 text-xs font-bold text-white h-10"></select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-slate-300 uppercase text-[10px]">Data Source</label>
+                            <select id="returnSource" onchange="toggleManualInput()" class="w-full bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-white">
+                                <option value="sp500">S&P 500 Historicals</option>
+                                <option value="acwi">MSCI ACWI Historicals</option>
+                                <option value="russell">Russell 2000 Historicals</option>
+                                <option value="manual">-- Manual Manager Returns --</option>
+                            </select>
+                        </div>
+
+                        <div id="manualInputBox" class="hidden">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Paste returns (%)</label>
+                            <textarea id="manualReturns" placeholder="10.5, -5, 12" class="w-full bg-slate-800 border-none rounded-xl p-3 text-xs font-mono text-blue-400 h-24"></textarea>
+                        </div>
+
+                        <div class="p-3 bg-red-900/20 border border-red-800/40 rounded-xl space-y-2">
+                            <p class="text-[10px] font-bold text-red-400 uppercase">Stress Test Shock</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select id="stressYear" class="bg-slate-800 text-[10px] p-2 rounded text-white border-none">
+                                    <option value="none">No Shock</option>
+                                    <option value="3">Year 3</option>
+                                    <option value="5">Year 5</option>
+                                    <option value="10">Year 10</option>
+                                </select>
+                                <select id="stressMagnitude" class="bg-slate-800 text-[10px] p-2 rounded text-white border-none">
+                                    <option value="-0.20">-20%</option>
+                                    <option value="-0.40">-40%</option>
+                                    <option value="-0.60">-60%</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 p-3 bg-blue-900/30 rounded-xl border border-blue-800/50">
+                            <div><p class="text-[9px] uppercase font-bold text-blue-300 mb-1">Alpha Bps</p><input type="number" id="mgrAlphaBps" value="500" class="w-full bg-slate-800 border-none p-2 rounded text-xs text-white"></div>
+                            <div><p class="text-[9px] uppercase font-bold text-blue-300 mb-1">Alpha Vol %</p><input type="number" id="alphaVol" value="5" class="w-full bg-slate-800 border-none p-2 rounded text-xs text-white"></div>
+                        </div>
+                        
+                        <div class="pt-2">
+                            <div class="flex justify-between mb-1">
+                                <label class="text-[9px] font-bold text-slate-400 uppercase">Mgmt Fee %</label>
+                                <label class="text-[9px] font-bold text-slate-400 uppercase">Perf Fee %</label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="number" id="mgmtFee" value="1.5" step="0.1" class="w-full bg-slate-800 border-none rounded-lg p-2.5 text-sm font-bold text-white">
+                                <input type="number" id="perfFee" value="20" class="w-full bg-slate-800 border-none rounded-lg p-2.5 text-sm font-bold text-white">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] uppercase text-slate-400 font-bold mb-1">Hurdle structure</label>
+                            <select id="hurdleType" onchange="toggleFixedHurdle()" class="w-full bg-slate-800 rounded-xl p-3 text-sm text-white font-bold">
+                                <option value="relative">Relative Hurdle</option>
+                                <option value="fixed">Fixed Rate Hurdle</option>
+                                <option value="compounding">Compounding Hurdle</option>
+                                <option value="none">None</option>
+                            </select>
+                        </div>
+                        <div id="fixedHurdleBox" class="hidden">
+                            <label class="block text-[10px] font-bold text-orange-400 uppercase mb-1">Hurdle Rate (%)</label>
+                            <input type="number" id="fixedHurdleRate" value="7.0" class="w-full bg-orange-900/20 border border-orange-500 rounded-xl p-3 text-sm text-orange-400 font-bold">
+                        </div>
+                        
+                        <div class="flex items-center p-3 bg-slate-800 rounded-xl">
+                            <input type="checkbox" id="useHWM" checked class="h-4 w-4 rounded text-blue-600 border-none bg-slate-700">
+                            <label for="useHWM" class="ml-2 text-[10px] uppercase font-bold text-slate-300">High Watermark</label>
+                        </div>
+                        <button onclick="runAll()" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl hover:bg-blue-500 shadow-lg uppercase text-[11px] tracking-widest transition-all">Audit Performance</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="lg:col-span-9 space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="stat-card p-8 rounded-3xl shadow-xl text-white flex flex-col items-center justify-center border-b-8 border-blue-700">
+                        <p class="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-2 text-center">Avg. Total Annual Cost</p>
+                        <p id="statImpliedFee" class="text-5xl font-mono font-black text-white">0.00%</p>
+                    </div>
+                    <div class="bg-blue-600 p-8 rounded-3xl shadow-xl text-white flex flex-col items-center justify-center border-b-8 border-blue-900">
+                        <p class="text-xs font-bold uppercase tracking-[0.2em] text-blue-100 mb-2 text-center">Total Profits Shared</p>
+                        <p id="statProfitShare" class="text-5xl font-mono font-black text-white">0.0%</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Growth Attribution</h3>
+                        <canvas id="mainChart" height="200"></canvas>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Annual Return Waterfall (%)</h3>
+                        <canvas id="waterfallChart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest text-center mb-4">Fees by Market Regime</h3>
+                        <canvas id="regimeChart" height="180"></canvas>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest text-center mb-4">Fee Variability Profile</h3>
+                        <canvas id="mcChart" height="180"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-5 bg-slate-900 border-b border-slate-800 text-center text-blue-400 font-bold uppercase text-xs">Investor Ledger (Click Headers to Sort)</div>
+                    <div class="max-h-[600px] overflow-y-auto custom-scrollbar">
+                        <table class="w-full text-left text-[11px]" id="ledgerTable">
+                            <thead class="bg-slate-50 sticky top-0 border-b border-slate-200 z-10 text-slate-400 font-black">
+                                <tr>
+                                    <th class="p-4" onclick="sortTable(0)">YEAR ↕</th>
+                                    <th class="p-4 text-right benchmark-text" onclick="sortTable(1)">BENCH % ↕</th>
+                                    <th class="p-4 text-right" onclick="sortTable(2)">MGR GROSS % ↕</th>
+                                    <th class="p-4 text-right text-blue-700" onclick="sortTable(3)">MGR NET % ↕</th>
+                                    <th class="p-4 text-right text-indigo-900" onclick="sortTable(4)">TOTAL FEE % ↕</th>
+                                    <th class="p-4 text-right text-red-500" onclick="sortTable(5)">TOTAL FEES ($) ↕</th>
+                                    <th class="p-4 text-right text-slate-900 font-black" onclick="sortTable(6)">NAV ↕</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="max-w-[1600px] mx-auto p-4 lg:p-8 mt-12 no-print">
+        <div class="bg-slate-100 border-l-4 border-slate-400 p-8 rounded-3xl">
+            <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter mb-4">Monte Carlo Methodology & Disclosures</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-xs text-slate-600 leading-relaxed">
+                <div class="space-y-3">
+                    <h3 class="font-bold text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1">Market Model</h3>
+                    <p>The "Fee Variability Profile" uses a <strong>Stochastic Brownian Motion</strong> model to project return paths over a 10-year cycle. These assumptions are independent of the historical data in the control panel to provide a normalized probability density.</p>
+                    <ul class="list-disc pl-4 space-y-1">
+                        <li><strong>Mean Base Return:</strong> 8.0% p.a.</li>
+                        <li><strong>Base Volatility:</strong> 16.0% p.a.</li>
+                    </ul>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="font-bold text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1">Active Assumptions</h3>
+                    <p>The simulation integrates the <strong>structural fee parameters</strong> from your Control Panel to model crystallization probability:</p>
+                    <ul class="list-disc pl-4 space-y-1">
+                        <li><strong>Mgmt Fee:</strong> <span id="noteMgmt">0.0</span>% (applied to Beginning NAV)</li>
+                        <li><strong>Perf Fee:</strong> <span id="notePerf">0.0</span>%</li>
+                        <li><strong>HWM:</strong> Active High Watermark logic.</li>
+                    </ul>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="font-bold text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1">Hurdle Mechanics</h3>
+                    <p>Monte Carlo crystallization is subject to your selected hurdle structure:</p>
+                    <ul class="list-disc pl-4 space-y-1">
+                        <li><strong>Type:</strong> <span id="noteHurdleType">N/A</span></li>
+                        <li><strong>Rate:</strong> <span id="noteHurdleRate">N/A</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const historicalDB = {
+            "sp500": { "2000":-9.10, "2001":-11.89, "2002":-22.10, "2003":28.68, "2004":10.88, "2005":4.91, "2006":15.79, "2007":5.49, "2008":-37.00, "2009":26.46, "2010":15.06, "2011":2.11, "2012":16.00, "2013":32.39, "2014":13.69, "2015":1.38, "2016":11.96, "2017":21.83, "2018":-4.38, "2019":31.49, "2020":18.40, "2021":28.71, "2022":-18.11, "2023":26.29, "2024":24.22, "2025":10.50 },
+            "acwi": { "2000":-12.92, "2001":-16.20, "2002":-19.28, "2003":33.99, "2004": 15.23, "2005": 10.84, "2006": 20.95, "2007": 11.66, "2008": -42.19, "2009": 34.63, "2010": 12.67, "2011": -7.35, "2012": 16.13, "2013": 22.80, "2014": 4.16, "2015": -2.36, "2016": 7.86, "2017": 23.97, "2018": -9.41, "2019": 26.60, "2020": 16.25, "2021": 18.54, "2022": -18.36, "2023": 22.20, "2024": 18.00, "2025": 8.20 },
+            "russell": { "2000":-3.02, "2001": 2.49, "2002": -20.48, "2003": 47.25, "2004": 18.33, "2005": 4.55, "2006": 18.37, "2007": -1.57, "2008": -33.79, "2009": 27.17, "2010": 26.85, "2011": -4.18, "2012": 16.35, "2013": 38.82, "2014": 4.89, "2015": -4.41, "2016": 21.31, "2017": 14.65, "2018": -11.01, "2019": 25.52, "2020": 19.96, "2021": 14.82, "2022": -20.44, "2023": 16.93, "2024": 15.20, "2025": 12.40 }
+        };
+
+        let charts = {};
+        const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+        function toggleManualInput() {
+            document.getElementById('manualInputBox').classList.toggle('hidden', document.getElementById('returnSource').value !== 'manual');
+        }
+        
+        function toggleFixedHurdle() {
+            const h = document.getElementById('hurdleType').value;
+            const hurdleBox = document.getElementById('fixedHurdleBox');
+            if(hurdleBox) hurdleBox.classList.toggle('hidden', !['fixed', 'compounding'].includes(h));
+        }
+
+        function init() {
+            const s = document.getElementById('startYear'), e = document.getElementById('endYear');
+            s.innerHTML = ""; e.innerHTML = "";
+            for(let y = 2000; y <= 2025; y++) {
+                s.add(new Option(y, y)); e.add(new Option(y, y));
+            }
+            s.value = "2000"; e.value = "2024";
+            toggleFixedHurdle();
+            runAll();
+        }
+
+        function boxMuller() { let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+        function runAnalysis() {
+            const start = parseInt(document.getElementById('startYear').value), end = parseInt(document.getElementById('endYear').value);
+            const princ = parseFloat(document.getElementById('principal').value) || 1000000;
+            const src = document.getElementById('returnSource').value;
+            const alpha = parseFloat(document.getElementById('mgrAlphaBps').value)/10000, vol = parseFloat(document.getElementById('alphaVol').value)/100;
+            const hType = document.getElementById('hurdleType').value, fHurdle = parseFloat(document.getElementById('fixedHurdleRate').value)/100;
+            const mRate = parseFloat(document.getElementById('mgmtFee').value)/100, pRate = parseFloat(document.getElementById('perfFee').value)/100, useHWM = document.getElementById('useHWM').checked;
+            const stressY = document.getElementById('stressYear').value, stressM = parseFloat(document.getElementById('stressMagnitude').value);
+
+            let nav = princ, hwm = princ, totalFeesAllYears = 0, sumCap = 0;
+            let totalMgmtPaid = 0, totalPerfPaid = 0, compoundingHurdleBalance = princ;
+            let labs = ["Start"], bData = [princ], nData = [princ], yearlyResults = [], html = "";
+
+            const manualArray = document.getElementById('manualReturns').value.split(/[\s,]+/).filter(x => x !== "").map(x => parseFloat(x) / 100);
+
+            for (let y = start; y <= end; y++) {
+                const br = (historicalDB['sp500'][y.toString()] || 0) / 100;
+                let mr;
+                const idx = y - start;
+                if(src === 'manual') {
+                    mr = (idx < manualArray.length) ? manualArray[idx] : 0;
+                } else {
+                    const baseIdxReturn = (historicalDB[src][y.toString()] || 0) / 100;
+                    mr = baseIdxReturn + alpha + (boxMuller() * vol);
+                }
+                if(stressY !== "none" && (idx + 1) === parseInt(stressY)) mr = stressM;
+
+                let mf = nav * mRate; 
+                totalMgmtPaid += mf;
+                sumCap += nav; 
+                const pNav = nav;
+                let pre = (nav * (1+mr)) - mf;
+                
+                let thresh;
+                if(hType === 'compounding') {
+                    compoundingHurdleBalance *= (1 + fHurdle);
+                    thresh = useHWM ? Math.max(hwm, compoundingHurdleBalance) : compoundingHurdleBalance;
+                } else {
+                    let hr = (hType === 'relative' ? br : (hType === 'fixed' ? fHurdle : 0));
+                    thresh = useHWM ? Math.max(hwm, nav * (1+hr)) : nav * (1+hr);
+                }
+
+                let pf = pre > thresh ? (pre-thresh) * pRate : 0;
+                totalPerfPaid += pf;
+                let totalFeeThisYear = mf + pf; nav = pre - pf;
+                if(nav > hwm) hwm = nav; totalFeesAllYears += totalFeeThisYear;
+                
+                yearlyResults.push({ benchR: br, feePct: totalFeeThisYear / pNav });
+                labs.push(y); bData.push(bData[bData.length-1]*(1+br)); nData.push(nav);
+                html += `<tr><td class="p-4 font-black">${y}</td><td class="p-4 text-right benchmark-text">${(br*100).toFixed(1)}%</td><td class="p-4 text-right">${(mr*100).toFixed(1)}%</td><td class="p-4 text-right text-blue-700">${(((nav/pNav)-1)*100).toFixed(2)}%</td><td class="p-4 text-right text-indigo-900 font-bold">${((totalFeeThisYear/pNav)*100).toFixed(2)}%</td><td class="p-4 text-right text-red-500">-${fmt.format(totalFeeThisYear)}</td><td class="p-4 text-right font-black text-slate-900">${fmt.format(nav)}</td></tr>`;
+            }
+            document.getElementById('tableBody').innerHTML = html;
+            document.getElementById('statImpliedFee').innerText = ((totalFeesAllYears / sumCap) * 100).toFixed(2) + "%";
+            const denominator = (nav - princ + totalFeesAllYears);
+            document.getElementById('statProfitShare').innerText = denominator > 0 ? ((totalFeesAllYears / denominator) * 100).toFixed(1) + "%" : "0.0%";
+
+            const numYears = (end - start) + 1;
+            const annNet = (Math.pow(nav / princ, 1 / numYears) - 1) * 100;
+            const annMgmtDrag = (totalMgmtPaid / sumCap) * 100;
+            const annPerfDrag = (totalPerfPaid / sumCap) * 100;
+            const annGross = annNet + annMgmtDrag + annPerfDrag;
+
+            updateMainChart(labs, bData, nData); 
+            updateRegimeChart(yearlyResults);
+            updateWaterfallChart(annGross, annMgmtDrag, annPerfDrag, annNet);
+        }
+
+        function updateWaterfallChart(gross, mgmt, perf, net) {
+            const ctx = document.getElementById('waterfallChart').getContext('2d');
+            if(charts.waterfall) charts.waterfall.destroy();
+            charts.waterfall = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Gross Ann.', 'Mgmt Fee', 'Perf Fee', 'Net Ann.'],
+                    datasets: [{
+                        data: [[0, gross], [gross - mgmt, gross], [gross - mgmt - perf, gross - mgmt], [0, net]],
+                        backgroundColor: ['#1e3a8a', '#ef4444', '#b91c1c', '#10b981'],
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: false, ticks: { callback: v => v.toFixed(1) + '%' }, grace: '10%' }
+                    }
+                }
+            });
+        }
+
+        function sortTable(n) {
+            var table = document.getElementById("ledgerTable"), rows, switching = true, i, x, y, shouldSwitch, dir = "asc", switchcount = 0;
+            while (switching) {
+                switching = false; rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false; x = rows[i].getElementsByTagName("TD")[n]; y = rows[i+1].getElementsByTagName("TD")[n];
+                    let xVal = parseFloat(x.innerText.replace(/[$,%]/g, '')) || 0;
+                    let yVal = parseFloat(y.innerText.replace(/[$,%]/g, '')) || 0;
+                    if (dir == "asc") { if (xVal > yVal) { shouldSwitch = true; break; } }
+                    else if (dir == "desc") { if (xVal < yVal) { shouldSwitch = true; break; } }
+                }
+                if (shouldSwitch) { rows[i].parentNode.insertBefore(rows[i + 1], rows[i]); switching = true; switchcount++; }
+                else if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
+            }
+        }
+
+        function runMonteCarlo() {
+            // FIXED MARKET ASSUMPTIONS
+            const mu = 0.08; 
+            const sigma = 0.16;
+
+            // DYNAMIC PANEL INPUTS
+            const mRate = parseFloat(document.getElementById('mgmtFee').value)/100;
+            const pRate = parseFloat(document.getElementById('perfFee').value)/100;
+            const hType = document.getElementById('hurdleType').value;
+            const fHurdle = parseFloat(document.getElementById('fixedHurdleRate').value)/100;
+            const useHWM = document.getElementById('useHWM').checked;
+
+            // Update UI Note
+            document.getElementById('noteMgmt').innerText = document.getElementById('mgmtFee').value;
+            document.getElementById('notePerf').innerText = document.getElementById('perfFee').value;
+            document.getElementById('noteHurdleType').innerText = hType.charAt(0).toUpperCase() + hType.slice(1);
+            document.getElementById('noteHurdleRate').innerText = (hType === 'fixed' || hType === 'compounding') ? (fHurdle * 100).toFixed(1) + "%" : "N/A";
+
+            const iterations = 500;
+            let costs = [];
+
+            for (let i = 0; i < iterations; i++) {
+                let net = 1000000, hwm = 1000000, fees = 0, cap = 0;
+                let cBal = 1000000;
+
+                for (let j = 0; j < 10; j++) {
+                    let r = Math.exp((mu - 0.5 * sigma**2) + sigma * boxMuller()) - 1;
+                    
+                    cap += net; 
+                    let mf = net * mRate; 
+                    let pre = (net * (1+r)) - mf;
+                    
+                    let thresh;
+                    if(hType === 'compounding') {
+                        cBal *= (1 + fHurdle);
+                        thresh = useHWM ? Math.max(hwm, cBal) : cBal;
+                    } else if (hType === 'fixed') {
+                        thresh = useHWM ? Math.max(hwm, net * (1 + fHurdle)) : net * (1 + fHurdle);
+                    } else if (hType === 'relative') {
+                        thresh = useHWM ? Math.max(hwm, net * 1.08) : net * 1.08; // Proxy 8% return
+                    } else {
+                        thresh = hwm;
+                    }
+
+                    let pf = pre > thresh ? (pre - thresh) * pRate : 0;
+                    net = pre - pf; 
+                    if(net > hwm) hwm = net; 
+                    fees += (mf + pf);
+                }
+                costs.push((fees / cap) * 100);
+            }
+            updateMCChart(costs);
+        }
+
+        function updateMainChart(l, b, n) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if(charts.main) charts.main.destroy();
+            charts.main = new Chart(ctx, { type: 'line', data: { labels: l, datasets: [{ label: 'Benchmark', data: b, borderColor: '#f97316', pointRadius: 0, fill: false, borderWidth: 2 }, { label: 'Net NAV', data: n, borderColor: '#1e3a8a', backgroundColor: 'rgba(59, 130, 246, 0.08)', fill: true, tension: 0.2, borderWidth: 4 }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } } } });
+        }
+
+        function updateRegimeChart(results) {
+            results.sort((a, b) => a.benchR - b.benchR); const size = Math.floor(results.length / 3);
+            const avg = arr => (arr.length > 0 ? arr.reduce((s, x) => s + x.feePct, 0) / arr.length * 100 : 0);
+            const data = [avg(results.slice(0, size)), avg(results.slice(size, size * 2)), avg(results.slice(size * 2))];
+            const ctx = document.getElementById('regimeChart').getContext('2d');
+            if(charts.regime) charts.regime.destroy();
+            charts.regime = new Chart(ctx, { type: 'bar', data: { labels: ['Worst 1/3rd', 'Mid 1/3rd', 'Top 1/3rd'], datasets: [{ data, backgroundColor: ['#94a3b8', '#3b82f6', '#1e3a8a'], borderRadius: 8 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => v.toFixed(2) + '%' } } } } });
+        }
+
+        function updateMCChart(data) {
+            let buckets = {}; data.forEach(v => { let b = (Math.round(v * 4) / 4).toFixed(2); buckets[b] = (buckets[b] || 0) + 1; });
+            const keys = Object.keys(buckets).sort((a, b) => a - b);
+            const ctx = document.getElementById('mcChart').getContext('2d');
+            if(charts.mc) charts.mc.destroy();
+            charts.mc = new Chart(ctx, { type: 'bar', data: { labels: keys.map(k => k + '%'), datasets: [{ data: keys.map(k => buckets[k]), backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } } });
+        }
+
+        function runAll() { runAnalysis(); runMonteCarlo(); }
+        window.onload = init;
+    </script>
+</body>
+</html>
